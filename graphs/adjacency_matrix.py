@@ -41,7 +41,7 @@ class AdjacencyMatrix:
             self.vertices[id] = vertex
             self.vertices_list[vertex] = id
 
-    def set_edge(self, vertex1, vertex2, cost=None, directed=False):
+    def set_edge(self, vertex1, vertex2, directed=False, cost=None):
         """
         :param vertex1: id of first vertex.
         :param vertex2: id of second vertex.

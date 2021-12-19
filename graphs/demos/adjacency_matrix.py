@@ -250,17 +250,28 @@ def loop(graph, commands):
         pygame.display.flip()
 
 def edge_or_vertex(s):
+    """
+    string argument describing and edge or vertex.
+    """
+    # dash and dot chosen to avoid problems on command line, like having to
+    # avoid redirection by quoting
+    directed = False
     if '-' in s:
-        v1, v2 = map(str.strip, s.split('-'))
-        return v1, v2
+        sep = '-'
+        directed = True
+    elif '.' in s:
+        sep = '.'
     else:
-        return tuple(s.strip())
+        # one vertex
+        return (s.strip(),)
+    v1, v2 = map(str.strip, s.split(sep))
+    return (v1, v2, directed)
 
 def make_graph_args(graph_strings):
     # keep actual edges
     edges = [edge for edge in graph_strings if len(edge) > 1]
     # flatten edges list into unique vertices
-    vertices = set(v for edge in edges for v in edge)
+    vertices = set(v for edge in edges for v in edge[:2])
     return (vertices, edges)
 
 class Visit:
@@ -302,6 +313,7 @@ def main(argv=None):
 
     # create commands to build the graph in an animated fashion
     vertices, edges = make_graph_args(args.graph)
+
     graph = AdjacencyMatrix(len(vertices))
     commands = []
     # commands to make vertices
@@ -309,8 +321,8 @@ def main(argv=None):
         commands.append((graph.set_vertex, index, vertex))
     # commands to make edges
     for edge in edges:
-        v1, v2 = edge
-        commands.append((graph.set_edge, v1, v2))
+        v1, v2, directed = edge
+        commands.append((graph.set_edge, v1, v2, directed))
     #
     visit = Visit(graph, 60)
     commands = chain(commands, repeat((visit,)))
