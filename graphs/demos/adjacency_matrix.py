@@ -3,7 +3,9 @@ import contextlib
 import math
 import os
 import random
-import textwrap
+
+from itertools import chain
+from itertools import repeat
 
 with contextlib.redirect_stdout(open(os.devnull,'w')):
     import pygame
@@ -24,7 +26,7 @@ class Animation:
         self.elapsed = elapsed
 
 
-def make_vertex_sprite(font, label, sprites_by_label, *groups):
+def make_vertex_sprite(font, label, *groups):
     sprite = pygame.sprite.Sprite(*groups)
     sprite.label = label
     text = f'{sprite.label}'
@@ -45,26 +47,55 @@ def make_vertex_sprite(font, label, sprites_by_label, *groups):
     sprite.center = pygame.Vector2(sprite.rect.center)
     return sprite
 
-def edge_or_vertex(s):
-    if '-' in s:
-        v1, v2 = map(str.strip, s.split('-'))
-        return v1, v2
-    else:
-        return tuple(s.strip())
+def render_matrix(
+    font,
+    graph,
+    padding=0,
+    font_color=(200,)*3,
+    border_color=(200,)*3,
+):
+    """
+    Render an image of the adjacency matrix.
+    """
+    table = [[None]*graph.nvertices for _ in range(graph.nvertices)]
 
-def make_graph_args(graph_strings):
-    # keep actual edges
-    edges = [edge_or_vertex
-             for edge_or_vertex in graph_strings
-             if len(edge_or_vertex) > 1]
-    # flatten edges list into unique vertices
-    vertices = set(v for edge in edges for v in edge)
-    return (vertices, edges)
+    # compute sizes
+    for ri, row in enumerate(graph.adjacency_matrix):
+        for ci, col in enumerate(row):
+            vertex1 = graph.vertices_list[ri]
+            vertex2 = graph.vertices_list[ci]
+            if col == AdjacencyMatrix.notset:
+                size = (0, 0)
+                text = None
+            else:
+                text = f'{vertex1}-{vertex2}'
+                size = font.size(text)
+            table[ri][ci] = (text, size)
+
+    cell_width = padding + max(max(width for (text, (width, height)) in row) for row in table)
+    cell_height = padding + max(height for row in table for (text, (width, height)) in row)
+    cell_size = (cell_width, cell_height)
+
+    table_image = pygame.Surface((cell_width*graph.nvertices, cell_height*graph.nvertices))
+    empty_image = pygame.Surface(cell_size)
+    pygame.draw.rect(empty_image, border_color, empty_image.get_rect(), 1)
+
+    for ri, row in enumerate(table):
+        for ci, (text, (width, height)) in enumerate(row):
+            if text is None:
+                image = empty_image
+            else:
+                image = pygame.Surface(cell_size)
+                pygame.draw.rect(image, border_color, image.get_rect(), 1)
+                text_image = font.render(text, True, font_color)
+                image.blit(text_image, text_image.get_rect(center=image.get_rect().center))
+            table_image.blit(image, (ri*cell_width,  ci*cell_height))
+    return table_image
 
 def loop(graph, commands):
     framerate = 60
 
-    command_animation = Animation(duration=framerate * .5)
+    command_animation = Animation(duration=framerate * .50)
     command = None
     history = []
     last_vertices = graph.vertices.copy()
@@ -80,6 +111,7 @@ def loop(graph, commands):
     sprites_by_label = {}
 
     dragging = None
+    visited = None
     hovering = None
     running = True
     while running:
@@ -111,6 +143,9 @@ def loop(graph, commands):
                 for sprite in group:
                     if sprite.rect.collidepoint(event.pos):
                         dragging = sprite
+                        # set all sprites to a draggable-friendly boundary radius
+                        for sprite in group:
+                            sprite.radius_border = sprite.radius * 2
                         break
                 else:
                     dragging = None
@@ -120,22 +155,22 @@ def loop(graph, commands):
             if command_animation.elapsed == command_animation.duration:
                 if command is not None:
                     history.append(command)
-                command = commands.pop(0)
+                command = next(commands)
                 command_animation.elapsed = 0
-        else:
-            # once commands is exhausted adjust radius border
-            for sprite in group:
-                sprite.radius_border = sprite.radius * 2
 
         # execute commands
         if command is not None:
             f, *args = command
-            f(*args)
+            # XXX: just assuming the ones that return something is the visitor
+            rv = f(*args)
+            if rv:
+                visited = rv
+
         # examine changes to vertices
         if last_vertices != graph.vertices:
             change = set(graph.vertices).difference(last_vertices)
             for label in change:
-                sprite = make_vertex_sprite(font, label, sprites_by_label, group)
+                sprite = make_vertex_sprite(font, label, group)
                 sprites_by_label[label] = sprite
                 cx, cy = frame.center
                 cx += random.choice(random_spread)
@@ -174,55 +209,87 @@ def loop(graph, commands):
         # TODO: draw history of commands like scrollback like command line.
 
         # draw - matrix table
-        table = [[None]*graph.nvertices for _ in range(graph.nvertices)]
-        for ri, row in enumerate(graph.adjacency_matrix):
-            for ci, col in enumerate(row):
-                vertex1 = graph.vertices_list[ri]
-                vertex2 = graph.vertices_list[ci]
-                if col == AdjacencyMatrix.notset:
-                    text_image = None
-                else:
-                    text_image = small_font.render(f'{vertex1}-{vertex2}', True, (200,)*3)
-                table[ri][ci] = text_image
+        table_image = render_matrix(
+            small_font,
+            graph,
+            padding=40,
+            font_color=(100,)*3,
+            border_color=(100,)*3,
+        )
+        screen.blit(table_image, table_image.get_rect(center=frame.center))
 
-        cell_width = 0
-        cell_height = 0
-        for row in table:
-            _width = max((image.get_width() for image in row if image is not None), default=0)
-            if _width > cell_width:
-                cell_width = _width
-            _height = max((image.get_height() for image in row if image is not None), default=0)
-            if _height > cell_height:
-                cell_height = _height
-        cell_width *= 1.5
-        cell_height *= 1.5
-
-        table_image = pygame.Surface((cell_width*graph.nvertices, cell_height*graph.nvertices))
-        empty = pygame.Surface((cell_width, cell_height))
-
-        for ri, row in enumerate(table):
-            for ci, image in enumerate(row):
-                if image is None:
-                    image = empty
-                table_image.blit(image,(ri*cell_width, ci*cell_height))
-
-        rect = table_image.get_rect(center=frame.center)
-        screen.blit(table_image, rect)
-        pygame.draw.rect(screen, (200,)*3, rect.inflate(4,4), 1)
-
-        # draw - edges
+        # draw - edge lines
         for label1, label2, _ in graph.get_edges():
             sprite1 = sprites_by_label[label1]
             sprite2 = sprites_by_label[label2]
-            pygame.draw.line(screen, (200,)*3, sprite1.rect.center, sprite2.rect.center)
+            if visited and sprite1.label in visited and sprite2.label in visited:
+                color = (200,200,10)
+                width = 4
+            else:
+                color = (200,)*3
+                width = 1
+            pygame.draw.line(screen, color, sprite1.rect.center, sprite2.rect.center, width)
 
         # draw - sprites
         group.draw(screen)
+
         # draw - hovering cursor
         if hovering:
             pygame.draw.circle(screen, (200,30,30), hovering.rect.center, hovering.radius*1.5, 1)
 
+        # draw - visited
+        if visited is not None:
+            for sprite in group:
+                if sprite.label in visited:
+                    if visited.index(sprite.label) == 0:
+                        color = (200,10,10)
+                    else:
+                        color = (10,200,10)
+                    pygame.draw.circle(screen, color, sprite.rect.center, sprite.radius*2, 4)
+
         pygame.display.flip()
+
+def edge_or_vertex(s):
+    if '-' in s:
+        v1, v2 = map(str.strip, s.split('-'))
+        return v1, v2
+    else:
+        return tuple(s.strip())
+
+def make_graph_args(graph_strings):
+    # keep actual edges
+    edges = [edge for edge in graph_strings if len(edge) > 1]
+    # flatten edges list into unique vertices
+    vertices = set(v for edge in edges for v in edge)
+    return (vertices, edges)
+
+class Visit:
+
+    def __init__(self, graph, duration, callback=None):
+        self.graph = graph
+        self.duration = duration
+        self.elapsed = 0
+        self.i = self.j = 0
+
+    def __call__(self):
+        self.elapsed += 1
+        if self.elapsed == self.duration:
+            self.elapsed = 0
+            #
+            edge = None
+            while edge is None:
+                if self.graph.adjacency_matrix[self.i][self.j] != AdjacencyMatrix.notset:
+                    vertex1 = self.graph.vertices_list[self.i]
+                    vertex2 = self.graph.vertices_list[self.j]
+                    edge = (vertex1, vertex2)
+                self.j += 1
+                if self.j == self.graph.nvertices:
+                    self.j = 0
+                    self.i += 1
+                    if self.i == self.graph.nvertices:
+                        self.i = 0
+                        self.j = 0
+            return edge
 
 
 def main(argv=None):
@@ -235,16 +302,18 @@ def main(argv=None):
 
     # create commands to build the graph in an animated fashion
     vertices, edges = make_graph_args(args.graph)
-
     graph = AdjacencyMatrix(len(vertices))
-
     commands = []
+    # commands to make vertices
     for index, vertex in enumerate(sorted(vertices)):
         commands.append((graph.set_vertex, index, vertex))
+    # commands to make edges
     for edge in edges:
         v1, v2 = edge
         commands.append((graph.set_edge, v1, v2))
-
+    #
+    visit = Visit(graph, 60)
+    commands = chain(commands, repeat((visit,)))
     loop(graph, commands)
 
 if __name__ == '__main__':
