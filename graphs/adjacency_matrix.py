@@ -67,6 +67,11 @@ class AdjacencyMatrix:
         # ensure undirected edge is removed too
         self.adjacency_matrix[j][i] = self.notset
 
+    def get_edge(self, vertex1, vertex2):
+        i = self.vertices_list.index(vertex1)
+        j = self.vertices_list.index(vertex2)
+        return self.adjacency_matrix[i][j]
+
     def get_vertices(self):
         return self.vertices_list
 
@@ -84,3 +89,8 @@ class AdjacencyMatrix:
 
     def get_matrix(self):
         return self.adjacency_matrix
+
+    def get_neighbors(self, vertex):
+        for v1, v2, cost in self.get_edges():
+            if vertex in (v1, v2):
+                yield (v1, v2, cost)
