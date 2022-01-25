@@ -72,8 +72,10 @@ def render_matrix(
                 size = font.size(text)
             table[ri][ci] = (text, size)
 
-    cell_width = padding + max(max(width for (text, (width, height)) in row) for row in table)
-    cell_height = padding + max(height for row in table for (text, (width, height)) in row)
+    cell_width = padding + max(
+        (max(width for (text, (width, height)) in row) for row in table), default=0)
+    cell_height = padding + max(
+        (height for row in table for (text, (width, height)) in row), default=0)
     cell_size = (cell_width, cell_height)
 
     table_image = pygame.Surface((cell_width*graph.nvertices, cell_height*graph.nvertices))
@@ -249,31 +251,6 @@ def loop(graph, commands):
 
         pygame.display.flip()
 
-def edge_or_vertex(s):
-    """
-    string argument describing and edge or vertex.
-    """
-    # dash and dot chosen to avoid problems on command line, like having to
-    # avoid redirection by quoting
-    directed = False
-    if '-' in s:
-        sep = '-'
-        directed = True
-    elif '.' in s:
-        sep = '.'
-    else:
-        # one vertex
-        return (s.strip(),)
-    v1, v2 = map(str.strip, s.split(sep))
-    return (v1, v2, directed)
-
-def make_graph_args(graph_strings):
-    # keep actual edges
-    edges = [edge for edge in graph_strings if len(edge) > 1]
-    # flatten edges list into unique vertices
-    vertices = set(v for edge in edges for v in edge[:2])
-    return (vertices, edges)
-
 class Visit:
 
     def __init__(self, graph, duration, callback=None):
@@ -302,6 +279,31 @@ class Visit:
                         self.j = 0
             return edge
 
+
+def edge_or_vertex(s):
+    """
+    string argument describing and edge or vertex.
+    """
+    # dash and dot chosen to avoid problems on command line, like having to
+    # avoid redirection by quoting
+    directed = False
+    if '-' in s:
+        sep = '-'
+        directed = True
+    elif '.' in s:
+        sep = '.'
+    else:
+        # one vertex
+        return (s.strip(),)
+    v1, v2 = map(str.strip, s.split(sep))
+    return (v1, v2, directed)
+
+def make_graph_args(graph_strings):
+    # keep actual edges
+    edges = [edge for edge in graph_strings if len(edge) > 1]
+    # flatten edges list into unique vertices
+    vertices = set(v for edge in edges for v in edge[:2])
+    return (vertices, edges)
 
 def main(argv=None):
     """
