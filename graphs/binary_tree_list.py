@@ -59,10 +59,15 @@ class BinaryTree:
         return self._tree[index]
 
     def depth(self):
-        # TODO:
-        # * left off here
-        # * how to calculate depth?
-        pass
+        d = 0
+        t = self.count(d)
+        while t < len(self._tree):
+            d += 1
+            t += self.count(d)
+        return d
+
+    def insert(self, node):
+        raise NotImplementedError
 
     def count(self, level):
         # number of elements at level
