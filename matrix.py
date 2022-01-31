@@ -41,29 +41,6 @@ class TestMatrix(unittest.TestCase):
         self.assertEqual(C[0][0], 83)
 
 
-def iterproduct(A, B):
-    """
-    Generate position, row-column tuples. Intended for the row-by-column
-    operations to build a mapping of positions to values.
-    """
-    # TODO: Quickly tried to make B_by_column an itertools.repeat but it didn't
-    #       work and is maybe trying to be too clever. Was thinking this would
-    #       avoid enumerate-ing the list many times.
-    B_by_column = list(zip(*B))
-    for A_ri, A_row in enumerate(A):
-        for B_ci, B_col in enumerate(B_by_column):
-            yield ((A_ri, B_ci), (A_row, B_col))
-
-def make_matrix_from_space(S):
-    """
-    Convert dict of position/values to nested lists.
-    """
-    # max row and column indices
-    max_ci, max_ri = map(max, zip(*S))
-    # construct nested list matrix of result
-    C = [[S[(row,col)] for col in range(max_ci+1)] for row in range(max_ri+1)]
-    return C
-
 def add(A, B):
     """
     Add matrices A and B.
@@ -78,8 +55,7 @@ def dotproduct(A, B):
     #       dimensions late was my first idea for resizing after the operation.
     #       Could have taken the minimum row/column size of the matrices.
     # TODO: performance test of this vs. that.
-    S = {pos: sum(starmap(mul, zip(*rowcol))) for pos, rowcol in iterproduct(A, B)}
-    return make_matrix_from_space(S)
+    return [ [sum(starmap(mul, zip(A_row, B_col))) for B_col in zip(*B)] for A_row in A]
 
 if __name__ == '__main__':
     unittest.main()
