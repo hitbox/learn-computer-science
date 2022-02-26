@@ -57,5 +57,9 @@ def dotproduct(A, B):
     # TODO: performance test of this vs. that.
     return [ [sum(starmap(mul, zip(A_row, B_col))) for B_col in zip(*B)] for A_row in A]
 
+# TODO:
+# determinant of matrix
+# https://www.mathsisfun.com/algebra/matrix-determinant.html
+
 if __name__ == '__main__':
     unittest.main()
